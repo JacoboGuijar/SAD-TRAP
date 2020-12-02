@@ -42,9 +42,10 @@ intents = discord.Intents.default()
 intents.members = True
 client = discord.Client(guild_subscriptions = True, chunk_guilds_at_startup = True, intents = intents)
 
-def on_ready(cliente, intencion):
-    print('running on_ready')
-    cliente.run(os.environ['DISCORD_TOKEN'])
+@client.event
+async def on_ready():
+    print('Bot is ready')
+    
     auth = tweepy.OAuthHandler(os.environ['TWITTER_CONSUMER_KEY'], os.environ['TWITTER_CONSUMER_SECRET'])
     auth.set_access_token(os.environ['TWITTER_ACCESS_TOKEN'], os.environ['TWITTER_ACCESS_TOKEN_SECRET'])
     api = tweepy.API(auth)
@@ -58,43 +59,41 @@ def on_ready(cliente, intencion):
     admin_channel = guild.get_channel(guild.channels[4].id)
     admin = client.get_user(guild.owner_id)
     await admin_channel.send(admin.mention + ': running...')
+
     #Now we can continue
     
     channel = guild.get_channel(guild.channels[3].id)
-    await cliente.close()
     print('getting into the while...')
     while True:
-        texts = []
-        cliente.run()
-        messages = await channel.history(limit = None).flatten()
-        await cliente.close()
-        for message in messages:
-            texts.append(message.content)
+      texts = []
+      
+      messages = await channel.history(limit = None).flatten()
 
-        
-        submissions = search_for_memes(texts)
-        
-        for submission in submissions:
-            if submission.id in texts:
-                print("submission: " + submission.id + " has already been posted")
-                submissions.remove(submission)
-            else:
-                print('Numero de mensajes en el canal: ' + str(len(await channel.history(limit = None).flatten())))
-                urllib.request.urlretrieve(submission.url, submission.id + submission.url[-4:])
-                if os.path.getsize(submission.id + submission.url[-4:]) < MAX_SIZE:
-                    print('posting file ' + submission.id + submission.url[-4:])
-                    api.update_with_media(filename = os.path.abspath(submission.id + submission.url[-4:]), status = REDDIT_URL+submission.id)
-                    cliente.run()
-                    await channel.send(submission.id)
-                    cliente.close()
-                    print(os.listdir(os.getcwd()))
-                    print("Tweet tweeted. HURRAY")
-                    
-                    os.remove(submission.id + submission.url[-4:])
-                    print('file removed successfully')
-                    time.sleep(1200)
-                else: 
-                    print('file ' + submission.url + ' is too big')
+      for message in messages:
+          texts.append(message.content)
+
+      
+      submissions = search_for_memes(texts)
+      
+      for submission in submissions:
+          if submission.id in texts:
+              print("submission: " + submission.id + " has already been posted")
+              submissions.remove(submission)
+          else:
+              print('Numero de mensajes en el canal: ' + str(len(await channel.history(limit = None).flatten())))
+              urllib.request.urlretrieve(submission.url, submission.id + submission.url[-4:])
+              if os.path.getsize(submission.id + submission.url[-4:]) < MAX_SIZE:
+                print('posting file ' + submission.id + submission.url[-4:])
+                api.update_with_media(filename = os.path.abspath(submission.id + submission.url[-4:]), status = REDDIT_URL+submission.id)
+                await channel.send(submission.id)
+                print(os.listdir(os.getcwd()))
+                print("Tweet tweeted. HURRAY")
+                
+                os.remove(submission.id + submission.url[-4:])
+                print('file removed successfully')
+                time.sleep(1200)
+              else: 
+                print('file ' + submission.url + ' is too big')
               
 
 
@@ -109,4 +108,4 @@ def search_for_memes(texts):
     #print("devolviendo posts...")
     return submissions
 
-on_ready(client, intents)
+client.run(os.environ['DISCORD_TOKEN'])
