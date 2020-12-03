@@ -115,4 +115,4 @@ def search_for_memes(texts):
     return submissions
 
 while True:
-    memeitor(cliente)
+    await memeitor(cliente)
