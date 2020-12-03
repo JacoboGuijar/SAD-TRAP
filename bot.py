@@ -3,9 +3,18 @@ import os
 import random
 import praw
 import tweepy
-import asyncio
+import time
 import urllib.parse
 from discord.ext import commands
+# Place your Twitter API keys here
+#ACCESS_TOKEN = 'This one has a hyphen in the middle'
+#ACCESS_TOKEN_SECRET = 'This one is as long as the last one I think'
+#CONSUMER_KEY = 'This one is the shortest I believe'
+#CONSUMER_SECRET = 'this one is as long as the AkZES_TOKEN_SECRETO'
+
+#Reddit keys
+#CLIENT_ID = 'some letters'
+#CLIENT_SECRET = 'some capital letters'
 
 #Discord info
 #DISCORD_TOKEN = 'this one has a couple of dots in the middle'
@@ -13,7 +22,6 @@ from discord.ext import commands
 #DISCORD_CHANNEL_ID = another long number
 #Reddit you want to watch
 #SUBREDDIT = 'The subreddit you want to host'
-
 
 #Maximo tamaño de los ficheros
 MAX_SIZE = 3070000
@@ -24,95 +32,82 @@ REDDIT_URL = 'https://redd.it/'
 #Pause between tweets
 TIME_TO_SLEEP = 1200
 
-#Start de reddit client
 reddit = praw.Reddit(
                         user_agent='reddit Twitter tool monitoring ',
                         client_id=os.environ['REDDIT_CLIENT_ID'],
                         client_secret=os.environ['REDDIT_CLIENT_SECRET'])
 
-#Define Intents and create the client object they will be used many times
+#It is needed to allow the intents here and in the bot console at https://discord.com/developers/applications/
 intents = discord.Intents.default()
 intents.members = True
-cliente = discord.Client(guild_subscriptions = True, chunk_guilds_at_startup = True, intents = intents)
+client = discord.Client(guild_subscriptions = True, chunk_guilds_at_startup = True, intents = intents)
 
-async def memeitor(client):
-    print('Start...')
-
-    #Start Twitter client
+@client.event
+async def on_ready():
+    print('Bot is ready')
+    
     auth = tweepy.OAuthHandler(os.environ['TWITTER_CONSUMER_KEY'], os.environ['TWITTER_CONSUMER_SECRET'])
     auth.set_access_token(os.environ['TWITTER_ACCESS_TOKEN'], os.environ['TWITTER_ACCESS_TOKEN_SECRET'])
     api = tweepy.API(auth)
+    print(client.guilds)
+    guild = client.guilds[0]
+    #First we are going to tell the admin that the bot is running so he does not need to check the channel everyday
+    
+    print(guild.channels) #In case you want to see the guild channels. Use this to see the channels ids 
+    #You can get the channels easily as Discord storages them in guild.channels in order of creation. In my case this are
+    #the only ones I am using.
+    admin_channel = guild.get_channel(guild.channels[4].id)
+    admin = client.get_user(guild.owner_id)
+    await admin_channel.send(admin.mention + ': running...')
 
-    client.run(os.environ['DISCORD_TOKEN'])
-    #Getting Guild Channel and Admin
-    print('Getting Guild Channel and Admin...')
-    guild = client.get_guild(os.environ['DISCORD_GUILD'])
-    print(guild)
-    channel = guild.get_channel(os.environ['DISCORD_CHANNEL_ID'])
-    print('getting guild and channel closed succesfully')
+    #Now we can continue
+    
+    channel = guild.get_channel(guild.channels[3].id)
+    print('getting into the while...')
+    while True:
+      texts = []
+      
+      messages = await channel.history(limit = None).flatten()
 
-    #Getting messages
-    print('getting messages...')
-    messages = await channel.history(limit = None).flatten()
-    texts = get_messages(messages)
-    client.close()
-    print('getting messages closed succesfully')
+      for message in messages:
+          texts.append(message.content)
 
-    #Get the subreddit and see if the post has already been posted
-    print('searching for submissions...')
-    submissions = search_for_memes(texts)
-    for submission in submissions:
-        #If already published pass
-        if submissions.id in texts:
-            print('submission: ' + submission.id + ' has already been posted')
-            submissions.remove(submission)
-        else:
-            #Get the image
-            print('Numero de mensajes en el canal: ' + str(len(await channel.history(limit = None).flatten())))
-            urllib.request.urlretrieve(submission.url, submission.id + submission.url[-4:])
-
-            #If the image is small it is posted
-            if os.path.getsize(submission.id + submission.url[-4:]) < MAX_SIZE:
-                print('posting file: ' + submission.id + submission.url[-4:])
-
-                #Posting on twitter
-                api.update_with_media(filename = os.path.abspath(submission.id + submission.url[-4:]), status = REDDIT_URL + submission.id)
-                
-                #Posting on Discord
-                client.run(os.environ['DISCORD_TOKEN'])
+      
+      submissions = search_for_memes(texts)
+      
+      for submission in submissions:
+          if submission.id in texts:
+              print("submission: " + submission.id + " has already been posted")
+              submissions.remove(submission)
+          else:
+              print('Numero de mensajes en el canal: ' + str(len(await channel.history(limit = None).flatten())))
+              urllib.request.urlretrieve(submission.url, submission.id + submission.url[-4:])
+              if os.path.getsize(submission.id + submission.url[-4:]) < MAX_SIZE:
+                print('posting file ' + submission.id + submission.url[-4:])
+                api.update_with_media(filename = os.path.abspath(submission.id + submission.url[-4:]), status = REDDIT_URL+submission.id)
                 await channel.send(submission.id)
-                client.close()
-                print('tweet tweeted: HURRAY!')
-
-                #Remove the file
+                print(os.listdir(os.getcwd()))
+                print("Tweet tweeted. HURRAY")
+                
                 os.remove(submission.id + submission.url[-4:])
                 print('file removed successfully')
-                
-                #Sleep for TIME_TO_SLEEP time and you avoid Twitter and reddit from getting mad
-                await asyncio.sleep(TIME_TO_SLEEP)
-            else:
-                print('file ' + submission.id + submission.url[-4:] + ' is too big')
+                time.sleep(1200)
+              else: 
+                print('file ' + submission.url + ' is too big')
+              
 
-
-
-
-async def get_messages(messages):
-    texts = []
-    for message in messages:
-        texts.append(message.content)
-    
-    return texts
 
 def search_for_memes(texts):
     subreddit = reddit.subreddit(os.environ['SUBREDDIT_NAME'])
     submissions = []
     print("searching for memes...")
-    for submission in subreddit.hot(limit = 50):
+    for submission in subreddit.hot(limit = 100):
         if '.png'in submission.url or '.jpg' in submission.url:            
             submissions.append(submission)
 
     #print("devolviendo posts...")
     return submissions
 
-while True:
-    def search_for_memes(texts)
+client.run(os.environ['DISCORD_TOKEN'])
+
+ 
